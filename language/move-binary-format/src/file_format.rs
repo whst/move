@@ -92,6 +92,30 @@ macro_rules! define_index {
                 self.0 as usize
             }
         }
+
+        impl Serialize for $name {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                serializer.serialize_u16(self.0)
+            }
+        }
+
+        impl<'de> Deserialize<'de> for $name {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                Ok(Self(u16::deserialize(deserializer)?))
+            }
+        }
+
+        impl From<u16> for $name {
+            fn from(idx: u16) -> Self {
+                Self::new(idx)
+            }
+        }
     };
 }
 
@@ -215,7 +239,7 @@ pub const NO_TYPE_ARGUMENTS: SignatureIndex = SignatureIndex(0);
 /// Modules introduce a scope made of all types defined in the module and all functions.
 /// Type definitions (fields) are private to the module. Outside the module a
 /// Type is an opaque handle.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 pub struct ModuleHandle {
@@ -238,7 +262,7 @@ pub struct ModuleHandle {
 ///
 /// At link time ability/constraint checking is performed and an error is reported if there is a
 /// mismatch with the definition.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 pub struct StructHandle {
@@ -278,7 +302,7 @@ pub struct StructTypeParameter {
 /// and the verifier enforces that property. The signature of the function is used at link time to
 /// ensure the function reference is valid and it is also used by the verifier to type check
 /// function calls.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(params = "usize"))]
 pub struct FunctionHandle {
@@ -295,7 +319,7 @@ pub struct FunctionHandle {
 }
 
 /// A field access info (owner type and offset)
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 pub struct FieldHandle {
@@ -307,7 +331,8 @@ pub struct FieldHandle {
 // Definitions are the module code. So the set of types and functions in the module.
 
 /// `StructFieldInformation` indicates whether a struct is native or has user-specified fields
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "fields", rename_all = "lowercase")]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 pub enum StructFieldInformation {
@@ -324,7 +349,7 @@ pub enum StructFieldInformation {
 // `StructInstantiation`s
 
 /// A complete or partial instantiation of a generic struct
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 pub struct StructDefInstantiation {
@@ -333,7 +358,7 @@ pub struct StructDefInstantiation {
 }
 
 /// A complete or partial instantiation of a function
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 pub struct FunctionInstantiation {
@@ -347,7 +372,7 @@ pub struct FunctionInstantiation {
 /// of the owner type.
 /// E.g. for `S<u8, bool>.f` where `f` is a field of any type, `instantiation`
 /// would be `[u8, boo]`
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 pub struct FieldInstantiation {
@@ -357,7 +382,7 @@ pub struct FieldInstantiation {
 
 /// A `StructDefinition` is a type definition. It either indicates it is native or defines all the
 /// user-specified fields declared on the type.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 pub struct StructDefinition {
@@ -389,7 +414,7 @@ impl StructDefinition {
 }
 
 /// A `FieldDefinition` is the definition of a field: its name and the field type.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 pub struct FieldDefinition {
@@ -442,7 +467,7 @@ impl std::convert::TryFrom<u8> for Visibility {
 
 /// A `FunctionDefinition` is the implementation of a function. It defines
 /// the *prototype* of the function and the function body.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(params = "usize"))]
 pub struct FunctionDefinition {
@@ -494,7 +519,7 @@ impl FunctionDefinition {
 
 /// A type definition. `SignatureToken` allows the definition of the set of known types and their
 /// composition.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 pub struct TypeSignature(pub SignatureToken);
@@ -502,7 +527,7 @@ pub struct TypeSignature(pub SignatureToken);
 // TODO: remove at some point or move it in the front end (language/move-ir-compiler)
 /// A `FunctionSignature` in internally used to create a unique representation of the overall
 /// signature as need. Consider deprecated...
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(params = "usize"))]
 pub struct FunctionSignature {
@@ -526,7 +551,7 @@ pub struct FunctionSignature {
 ///
 /// Locals include the arguments to the function from position `0` to argument `count - 1`.
 /// The remaining elements are the type of each local.
-#[derive(Clone, Debug, Default, Eq, Hash, PartialEq, Ord, PartialOrd)]
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(params = "usize"))]
 pub struct Signature(
@@ -815,7 +840,8 @@ impl Arbitrary for AbilitySet {
 ///
 /// A SignatureToken can express more types than the VM can handle safely, and correctness is
 /// enforced by the verifier.
-#[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[serde(tag = "type", content = "value", rename_all = "lowercase")]
 pub enum SignatureToken {
     /// Boolean, `true` or `false`.
     Bool,
@@ -1075,14 +1101,14 @@ impl SignatureToken {
 
 /// A `Constant` is a serialized value along with its type. That type will be deserialized by the
 /// loader/evauluator
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Constant {
     pub type_: SignatureToken,
     pub data: Vec<u8>,
 }
 
 /// A `CodeUnit` is the body of a function. It has the function header and the instruction stream.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(params = "usize"))]
 pub struct CodeUnit {
@@ -1746,7 +1772,7 @@ impl CompiledScript {
 /// It is a unit of code that can be used by transactions or other modules.
 ///
 /// A module is published as a single entry and it is retrieved as a single blob.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct CompiledModule {
     /// Version number found during deserialization
     pub version: u32,
